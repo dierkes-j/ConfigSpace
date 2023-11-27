@@ -37,6 +37,7 @@ from typing import Any, Iterable, Iterator, KeysView, Mapping, cast, overload
 from typing_extensions import Final
 
 import numpy as np
+import hashlib
 
 import ConfigSpace.c_util
 from ConfigSpace import nx
@@ -821,6 +822,7 @@ class ConfigurationSpace(Mapping[str, Hyperparameter]):
             list[:class:`~ConfigSpace.configuration_space.Configuration`]:
             A single configuration if ``size`` 1 else a list of Configurations
         """
+
         if size == 1:
             warnings.warn(
                 "Please leave at default or explicitly set `size=None`."
@@ -871,13 +873,16 @@ class ConfigurationSpace(Mapping[str, Hyperparameter]):
                 hyperparameters_with_children.append(uhp)
 
         while len(accepted_configurations) < size:
+            cur_rs_seed = self.random.randint(0, 2 ** 32 - 1)
             if missing != size:
                 missing = int(1.1 * missing)
             vector: np.ndarray = np.ndarray((missing, num_hyperparameters), dtype=float)
 
             for i, hp_name in enumerate(self._hyperparameters):
                 hyperparameter = self._hyperparameters[hp_name]
-                vector[:, i] = hyperparameter._sample(self.random, missing)
+                hyp_seed = np.frombuffer(hashlib.sha256(str(hyperparameter).encode('utf-8')).digest(), dtype=np.uint32) + cur_rs_seed
+                cur_rs = np.random.RandomState(hyp_seed)
+                vector[:, i] = hyperparameter._sample(cur_rs, missing)
 
             for i in range(missing):
                 try:
